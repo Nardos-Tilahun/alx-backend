@@ -1,19 +1,23 @@
+#!/usr/bin/node
+/**
+ * Connect to redis server via redis client
+ */
 import { createClient } from 'redis';
 
-const redisClient = createClient();
+const client = createClient();
 
-redisClient.on('error', (error) => {
-  console.log(`Redis client not connected to server: ${error.message}`);
+client.on('error', (err) => {
+  console.log('Redis client not connected to the server:', err.toString());
 });
 
-redisClient.on('connect', () => {
+client.on('connect', () => {
   console.log('Redis client connected to the server');
 });
 
 function publishMessage(message, time) {
   setTimeout(() => {
     console.log(`About to send ${message}`);
-    redisClient.publish('holberton school channel', message);
+    client.PUBLISH('holberton school channel', message);
   }, time);
 }
 

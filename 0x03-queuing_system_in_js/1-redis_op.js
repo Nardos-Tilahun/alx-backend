@@ -2,7 +2,6 @@
 /**
  * Connect to redis server via redis client
  */
-import { promisify } from 'util';
 import { createClient, print } from 'redis';
 
 const client = createClient();
@@ -19,18 +18,12 @@ function setNewSchool(schoolName, value) {
   client.SET(schoolName, value, print);
 }
 
-async function displaySchoolValue(schoolName) {
-  const GET = promisify(client.GET).bind(client);
-  try {
-    const value = await GET(schoolName);
+function displaySchoolValue(schoolName) {
+  client.GET(schoolName, (err, value) => {
     console.log(value);
-  } catch (error) {
-    console.log(error.toString());
-  }
+  });
 }
 
-(async () => {
-  await displaySchoolValue('Holberton');
-  setNewSchool('HolbertonSanFrancisco', '100');
-  await displaySchoolValue('HolbertonSanFrancisco');
-})();
+displaySchoolValue('Holberton');
+setNewSchool('HolbertonSanFrancisco', '100');
+displaySchoolValue('HolbertonSanFrancisco');

@@ -1,10 +1,22 @@
+#!/usr/bin/node
+/**
+ * Create a job
+ */
 import { createQueue } from 'kue';
 
 const queue = createQueue();
-const jobData = { phoneNumber: '+254111222', message: 'Your order is on its way. Thank you for shopping with us.' };
-const job = queue.create('push_notification_code', jobData).save((error) => {
-  if (!error) console.log(`Notification job created: ${job.id}`);
+const jobData = { phoneNumber: '+2347065345423', message: 'Kindly verify your identification' };
+
+const job = queue
+  .create('push_notification_code', jobData)
+  .save((err) => {
+    if (!err) console.log(`Notification job created: ${job.id}`);
+  });
+
+job.on('complete', (result) => { /* eslint-disable-line no-unused-vars */
+  console.log('Notification job completed');
 });
 
-job.on('complete', () => console.log('Notification job completed'));
-job.on('failed', () => console.log('Notification job failed'));
+job.on('failed', (err) => { /* eslint-disable-line no-unused-vars */
+  console.log('Notification job failed');
+});

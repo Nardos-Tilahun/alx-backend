@@ -1,28 +1,33 @@
+#!/usr/bin/node
+/**
+ * Track progress and errors with Kue: Create the Job processor
+ */
 import { createQueue } from 'kue';
 
-const blacklistedNumbers = ['4153518780', '4153518781'];
+const blacklist = ['4153518780', '4153518781'];
+
 const queue = createQueue();
 
-/**
- * Handles notification jobs for queue 'push_notification_code_2'
- * @param {string} phoneNumber - user phone number
- * @param {string} message - push notification message
- * @param {import('kue').Job}} job - queue job
- * @param {import('kue').DoneCallback} done - done call back
- * @returns {void}
- */
 function sendNotification(phoneNumber, message, job, done) {
-  job.progress(0, 100);
-  if (blacklistedNumbers.some((number) => number === phoneNumber)) {
-    done(new Error(`Phone number ${phoneNumber} is blacklisted`));
-    return;
+  const total = 100;
+  function next(p) {
+    if (p === 0 || p === (total / 2)) {
+      job.progress(p, total);
+      if (p === (total / 2)) {
+        console.log(`Sending notification to ${phoneNumber}, with message: ${message}`);
+      }
+    }
+    if (blacklist.includes(job.data.phoneNumber)) {
+      return done(new Error(`Phone number ${job.data.phoneNumber} is blacklisted`));
+    }
+    if (p === total) {
+      return done();
+    }
+    return next(p + 1);
   }
-  job.progress(50, 100);
-  console.log(`Sending notification to ${phoneNumber}, with message: ${message}`);
-  done();
+  next(0);
 }
 
 queue.process('push_notification_code_2', 2, (job, done) => {
-  const { phoneNumber, message } = job.data;
-  sendNotification(phoneNumber, message, job, done);
+  sendNotification(job.data.phoneNumber, job.data.message, job, done);
 });

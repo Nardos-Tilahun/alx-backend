@@ -1,12 +1,11 @@
+#!/usr/bin/node
+/**
+ * Job processor
+ */
 import { createQueue } from 'kue';
 
 const queue = createQueue();
 
-/**
- * Sends notification to specified user
- * @param {string} phoneNumber  - recipient's phone number
- * @param {string} message      - message
- */
 function sendNotification(phoneNumber, message) {
   console.log(`Sending notification to ${phoneNumber}, with message: ${message}`);
 }

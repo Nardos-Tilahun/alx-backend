@@ -1,73 +1,77 @@
+#!/usr/bin/node
+/**
+ * Can I have a seat
+ */
+import { promisify } from 'util';
 import { createClient } from 'redis';
 import { createQueue } from 'kue';
-import { promisify } from 'util';
 import express from 'express';
 
-const app = express();
-const client = createClient();
-const queue = createQueue();
-const HOST = '127.0.0.1';
-const PORT = 1245;
-let reservationEnabled = true;
+let reservationEnabled;
+const redisClient = createClient();
 
-// Redis client ops
-/**
- * Sets the number of available seats from Redis
- * @param {number} number -
- */
+redisClient.on('error', (err) => {
+  console.log('Redis client not connected to the server:', err.toString());
+});
+
 function reserveSeat(number) {
-  client.set('available_seats', number);
+  return redisClient.SET('available_seats', number);
 }
 
-/**
- * Queries redis for number of available seats
- * @returns {number} number of available seats
- */
-async function getCurrentAvailableSeats() {
-  const getAsync = promisify(client.get).bind(client);
-  const availableSeats = await getAsync('available_seats');
-  return Number(availableSeats);
+function getCurrentAvailableSeats() {
+  const GET = promisify(redisClient.GET).bind(redisClient);
+  return GET('available_seats');
 }
 
-// Express app routes
-/* Gets number of available seats */
-app.get('/available_seats', async (req, res) => {
-  const availableSeats = await getCurrentAvailableSeats();
-  res.send({ numberOfAvailableSeats: availableSeats });
+const queue = createQueue();
+
+const app = express();
+
+app.get('/available_seats', (req, res) => {
+  getCurrentAvailableSeats()
+    .then((seats) => {
+      res.json({ numberOfAvailableSeats: seats });
+    })
+    .catch((err) => {
+      console.log(err);
+      res.status(500).json(null);
+    });
 });
 
-/* Enqueues seat reservation process */
-app.get('/reserve_seat', (_req, res) => {
-  if (!reservationEnabled) {
-    res.send({ status: 'Reservation are blocked' });
-    return;
+app.get('/reserve_seat', (req, res) => { /* eslint-disable-line consistent-return */
+  if (reservationEnabled === false) {
+    return res.json({ status: 'Reservation are blocked' });
   }
-  res.send({ status: 'Reservation in process' });
-  const reserveSeatJob = queue.create('reserve_seat').save();
-  reserveSeatJob.on('complete', () => {
-    console.log(`Seat reservation job ${reserveSeatJob.id} completed`);
-  });
-  reserveSeatJob.on('failed', (errorMessage) => {
-    console.log(`Seat reservation job ${reserveSeatJob.id} failed ${errorMessage}`);
-  });
+  const job = queue.create('reserve_seat', { task: 'reserve a seat' });
+  job
+    .on('complete', (status) => { /* eslint-disable-line no-unused-vars */
+      console.log(`Seat reservation job ${job.id} completed`);
+    })
+    .on('failed', (err) => {
+      console.log(`Seat reservation job ${job.id} failed: ${err.message || err.toString()}`);
+    })
+    .save((err) => {
+      if (err) return res.json({ status: 'Reservation failed' });
+      return res.json({ status: 'Reservation in process' });
+    });
 });
 
-/* Processes seats reservation jobs */
-app.get('/process', (_req, res) => {
-  queue.process('reserve_seat', async (_job, done) => {
+app.get('/process', (req, res) => {
+  res.json({ status: 'Queue processing' });
+  queue.process('reserve_seat', async (job, done) => {
     let availableSeats = await getCurrentAvailableSeats();
-    if (!availableSeats) {
-      done(new Error('Not enough seats available'));
-      return;
-    }
     availableSeats -= 1;
     reserveSeat(availableSeats);
-    if (!availableSeats) reservationEnabled = false;
-    done();
+    if (availableSeats >= 0) {
+      if (availableSeats === 0) reservationEnabled = false;
+      done();
+    }
+    done(new Error('Not enough seats available'));
   });
-  res.send({ status: 'Queue processing' });
 });
 
-app.listen(PORT, HOST, () => {
-  console.log(`Server is live at ${HOST}:${PORT}`);
+app.listen(1245, () => {
+  reserveSeat(50);
+  reservationEnabled = true;
+  console.log('API available on localhost via port 1245');
 });
